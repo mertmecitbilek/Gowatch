@@ -1,0 +1,30 @@
+services:
+  gowatch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gowatch
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # SQLite veritabanını local'de sakla (container silinse bile veri kalır)
+      - ./data:/app/data
+    environment:
+      - PORT=8080
+      - GIN_MODE=release
+      - TZ=Europe/Istanbul
+      - SESSION_SECRET=change-this-to-a-strong-random-secret
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+      # Email bildirimleri için (opsiyonel)
+      # - SMTP_HOST=smtp.gmail.com
+      # - SMTP_PORT=587
+      # - SMTP_USERNAME=your@gmail.com
+      # - SMTP_PASSWORD=your-app-password
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

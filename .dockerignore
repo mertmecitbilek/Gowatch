@@ -1,0 +1,23 @@
+# Bağımlılıklar
+vendor/
+
+# Build çıktısı
+bin/
+
+# Veritabanı (data/ klasörü Docker volume'dan gelecek)
+*.db
+data/
+
+# Ortam değişkenleri (hassas bilgiler)
+.env
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Go
+*.test
+*.out

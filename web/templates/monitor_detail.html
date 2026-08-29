@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.title}}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <div class="logo-icon-sm">
+                    <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+                        <circle cx="20" cy="20" r="18" stroke="url(#g2)" stroke-width="2.5"/>
+                        <circle cx="20" cy="20" r="4" fill="url(#g2)"/>
+                        <path d="M20 8 L20 13" stroke="url(#g2)" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M20 27 L20 32" stroke="url(#g2)" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M8 20 L13 20" stroke="url(#g2)" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M27 20 L32 20" stroke="url(#g2)" stroke-width="2" stroke-linecap="round"/>
+                        <defs>
+                            <linearGradient id="g2" x1="0" y1="0" x2="40" y2="40">
+                                <stop offset="0%" stop-color="#6366f1"/>
+                                <stop offset="100%" stop-color="#8b5cf6"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <span class="logo-name">GoWatch</span>
+            </div>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/" class="nav-item">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                </svg>
+                Dashboard
+            </a>
+            <a href="/settings" class="nav-item">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                Settings
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <form action="/logout" method="POST">
+                <button type="submit" class="logout-btn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                    Logout
+                </button>
+            </form>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div class="header-left">
+                <a href="/" class="back-link">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                    Back to Dashboard
+                </a>
+                <h1 class="page-title">{{.monitor.Name}}</h1>
+                <div class="monitor-meta">
+                    <span class="monitor-type-badge">{{.monitor.Type}}</span>
+                    <span class="monitor-url-text">{{.monitor.URL}}{{if .monitor.Port}}:{{.monitor.Port}}{{end}}</span>
+                    <span class="monitor-status-badge {{if eq .monitor.Status 1}}badge-up{{else if eq .monitor.Status 0}}badge-down{{else}}badge-pending{{end}}" id="detail-badge">
+                        {{if eq .monitor.Status 1}}UP{{else if eq .monitor.Status 0}}DOWN{{else}}PENDING{{end}}
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <div class="stats-bar detail-stats">
+            <div class="stat-card">
+                <div class="stat-number">{{printf "%.2f" .monitor.UptimePercent}}%</div>
+                <div class="stat-label">30d Uptime</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="uptime-24h">—</div>
+                <div class="stat-label">24h Uptime</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="uptime-7d">—</div>
+                <div class="stat-label">7d Uptime</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{.monitor.AvgLatency}}ms</div>
+                <div class="stat-label">Avg Latency</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{.monitor.Interval}}s</div>
+                <div class="stat-label">Check Interval</div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-header">
+                <h2>Last 90 Checks</h2>
+                <span class="section-hint">Hover for details</span>
+            </div>
+            <div class="heartbeat-bar" id="heartbeat-bar">
+                {{range .heartbeats}}
+                <div class="hb-block {{if eq .Status 1}}hb-up{{else}}hb-down{{end}}"
+                     title="{{.Time.Format "2006-01-02 15:04:05"}} — {{.Msg}} ({{.Latency}}ms)">
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-header">
+                <h2>Response Time (Last 48h)</h2>
+            </div>
+            <div class="chart-container">
+                <canvas id="latencyChart"></canvas>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-header">
+                <h2>Recent Checks</h2>
+            </div>
+            <div class="checks-log">
+                {{range .heartbeats}}
+                <div class="check-item {{if eq .Status 1}}check-up{{else}}check-down{{end}}">
+                    <div class="check-status-dot"></div>
+                    <div class="check-time">{{.Time.Format "Jan 02, 15:04:05"}}</div>
+                    <div class="check-msg">{{.Msg}}</div>
+                    <div class="check-latency">{{.Latency}}ms</div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/js/charts.js"></script>
+    <script>
+        const monitorId = {{.monitor.ID}};
+        fetch(`/api/monitors/${monitorId}/stats`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('uptime-24h').textContent = data.data.uptime_24h.toFixed(2) + '%';
+                document.getElementById('uptime-7d').textContent = data.data.uptime_7d.toFixed(2) + '%';
+            });
+
+        fetch(`/api/monitors/${monitorId}/heartbeats?hours=48&limit=500`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.data && data.data.length > 0) {
+                    initLatencyChart(data.data.reverse());
+                }
+            });
+    </script>
+</body>
+</html>
