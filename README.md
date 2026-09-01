@@ -7,7 +7,7 @@ GoWatch, kendi sunucunda barındırabileceğin (self-hosted), hafif ve modern bi
 - **Çoklu Kullanıcı Mimarisi:** Kullanıcılar kayıt olabilir, giriş yapabilir ve sadece kendi monitörlerini ve bildirimlerini yönetebilir.
 - **Farklı İzleme Türleri:** HTTP/HTTPS, TCP Port, Ping ve DNS sorgularını destekler.
 - **Gerçek Zamanlı Durum (Heartbeats):** Geçmiş uptime (çalışma süresi) yüzdelerini ve gecikme (latency) sürelerini saklar.
-- **Bildirim Kanalları:** Servislerden biri çöktüğünde anında haberiniz olur (Telegram, E-posta, Slack ve Discord destekler).
+- **Bildirim Kanalı:** Servislerden biri çöktüğünde anında haberiniz olur (Telegram).
 - **Hafif ve Hızlı:** Go (Golang) ve SQLite ile güçlendirilmiştir. Sunucuyu yormaz, minimum kaynak tüketir.
 - **Modern Arayüz:** Saf (Vanilla) CSS ile tasarlanmış göze hitap eden, responsive ve dinamik bir kontrol paneli (dashboard).
 
