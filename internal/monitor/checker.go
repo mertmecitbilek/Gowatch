@@ -1,10 +1,13 @@
 package monitor
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"gowatch/internal/database/models"
@@ -19,8 +22,15 @@ type CheckResult struct {
 
 // CheckHTTP HTTP/HTTPS kontrolü
 func CheckHTTP(m *models.Monitor) CheckResult {
+	timeout := time.Duration(m.Timeout) * time.Second
 	client := &http.Client{
-		Timeout: time.Duration(m.Timeout) * time.Second,
+		Timeout: timeout,
+		// Her bağlantı (yönlendirmeler dahil) iç ağ korumalı dialer'dan geçer
+		Transport: &http.Transport{
+			DialContext:         newDialer(timeout).DialContext,
+			TLSHandshakeTimeout: timeout,
+			DisableKeepAlives:   true,
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if m.MaxRedirects > 0 && len(via) >= m.MaxRedirects {
 				return http.ErrUseLastResponse
@@ -47,14 +57,14 @@ func CheckHTTP(m *models.Monitor) CheckResult {
 		return CheckResult{
 			Status:  models.StatusUp,
 			Latency: latency,
-			Message: fmt.Sprintf("%d %s", resp.StatusCode, resp.Status),
+			Message: resp.Status,
 		}
 	}
 
 	return CheckResult{
 		Status:  models.StatusDown,
 		Latency: latency,
-		Message: fmt.Sprintf("Unexpected status: %d %s", resp.StatusCode, resp.Status),
+		Message: fmt.Sprintf("Unexpected status: %s", resp.Status),
 	}
 }
 
@@ -62,11 +72,11 @@ func CheckHTTP(m *models.Monitor) CheckResult {
 func CheckTCP(m *models.Monitor) CheckResult {
 	host := m.URL
 	if m.Port > 0 {
-		host = fmt.Sprintf("%s:%d", m.URL, m.Port)
+		host = net.JoinHostPort(m.URL, strconv.Itoa(m.Port))
 	}
 
 	start := time.Now()
-	conn, err := net.DialTimeout("tcp", host, time.Duration(m.Timeout)*time.Second)
+	conn, err := newDialer(time.Duration(m.Timeout)*time.Second).Dial("tcp", host)
 	latency := time.Since(start).Milliseconds()
 
 	if err != nil {
@@ -85,40 +95,46 @@ func CheckTCP(m *models.Monitor) CheckResult {
 	}
 }
 
-// CheckPing ICMP ping kontrolü
+// CheckPing host erişilebilirlik kontrolü.
+// ICMP root yetkisi gerektirdiği için yaygın portlara (443, 80) TCP bağlantısı denenir.
+// Bağlantının kurulması veya host'un "connection refused" ile cevap vermesi host'un
+// ayakta olduğunu gösterir; zaman aşımı veya ağ hatası ise DOWN kabul edilir.
 func CheckPing(m *models.Monitor) CheckResult {
-	start := time.Now()
+	ports := []string{"443", "80"}
+	perPort := time.Duration(m.Timeout) * time.Second / time.Duration(len(ports))
+	dialer := newDialer(perPort)
 
-	// net.Dial ile ICMP simülasyonu (root gerektirmeyen yöntem)
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:80", m.URL), time.Duration(m.Timeout)*time.Second)
-	latency := time.Since(start).Milliseconds()
+	var lastErr error
+	for _, port := range ports {
+		start := time.Now()
+		conn, err := dialer.Dial("tcp", net.JoinHostPort(m.URL, port))
+		latency := time.Since(start).Milliseconds()
 
-	if err != nil {
-		// TCP başarısız olsa bile host erişilebilir olabilir
-		// DNS çözümlemesi yap
-		_, dnsErr := net.LookupHost(m.URL)
-		if dnsErr != nil {
+		if err == nil {
+			conn.Close()
 			return CheckResult{
-				Status:  models.StatusDown,
+				Status:  models.StatusUp,
 				Latency: latency,
-				Message: fmt.Sprintf("Host unreachable: %v", err),
+				Message: fmt.Sprintf("Host reachable: %s (tcp/%s open)", m.URL, port),
 			}
 		}
-		return CheckResult{
-			Status:  models.StatusUp,
-			Latency: latency,
-			Message: fmt.Sprintf("Host reachable (DNS resolved): %s", m.URL),
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			return CheckResult{
+				Status:  models.StatusUp,
+				Latency: latency,
+				Message: fmt.Sprintf("Host reachable: %s (tcp/%s refused)", m.URL, port),
+			}
 		}
-	}
-
-	if conn != nil {
-		conn.Close()
+		if errors.Is(err, ErrBlockedTarget) {
+			return CheckResult{Status: models.StatusDown, Latency: latency, Message: err.Error()}
+		}
+		lastErr = err
 	}
 
 	return CheckResult{
-		Status:  models.StatusUp,
-		Latency: latency,
-		Message: fmt.Sprintf("Host reachable: %s", m.URL),
+		Status:  models.StatusDown,
+		Latency: int64(m.Timeout) * 1000,
+		Message: fmt.Sprintf("Host unreachable: %v", lastErr),
 	}
 }
 

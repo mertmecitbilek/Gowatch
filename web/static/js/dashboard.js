@@ -95,7 +95,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 port: parseInt(document.getElementById('m-port').value) || 0,
                 interval: parseInt(document.getElementById('m-interval').value) || 60,
                 timeout: parseInt(document.getElementById('m-timeout').value) || 30,
-                retries: parseInt(document.getElementById('m-retries').value) || 1,
+                retries: (() => {
+                    const v = parseInt(document.getElementById('m-retries').value);
+                    return Number.isNaN(v) ? 1 : v;
+                })(),
                 accepted_codes: document.getElementById('m-codes').value || '200-299',
                 description: document.getElementById('m-description').value.trim(),
             notification_ids: JSON.stringify(notifIds),

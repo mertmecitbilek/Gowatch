@@ -12,6 +12,6 @@ services:
       - PORT=8080
       - GIN_MODE=debug
       - TZ=Europe/Istanbul
-      - SESSION_SECRET=change-this-to-a-strong-random-secret
       - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=admin123
+      # Geliştirme ortamında yerel servislerin izlenebilmesi için
+      - ALLOW_PRIVATE_TARGETS=true

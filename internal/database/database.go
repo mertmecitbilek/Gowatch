@@ -1,8 +1,9 @@
 package database
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"log"
-	"os"
 
 	"gowatch/internal/config"
 	"gowatch/internal/database/models"
@@ -18,11 +19,8 @@ var DB *gorm.DB
 func Connect() {
 	var err error
 
-	// DB yolunu environment'tan oku (Docker volume desteği için)
-	dbPath := os.Getenv("DATABASE_PATH")
-	if dbPath == "" {
-		dbPath = "gowatch.db"
-	}
+	// DB yolu config'den gelir (Docker volume desteği için DATABASE_PATH)
+	dbPath := config.App.DatabasePath
 
 	gormConfig := &gorm.Config{}
 	if config.App.GinMode == "release" {
@@ -62,13 +60,23 @@ func seedAdmin() uint {
 	result := DB.Where("username = ?", config.App.AdminUsername).First(&admin)
 
 	if result.Error == nil {
-		// Admin zaten var
+		// Admin zaten var; hâlâ varsayılan şifreyi kullanıyorsa uyar
+		if bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte(config.DefaultAdminPassword)) == nil {
+			log.Printf("⚠️  SECURITY WARNING: user %q still uses the default password %q. Change it from the Settings page!",
+				admin.Username, config.DefaultAdminPassword)
+		}
 		return admin.ID
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword(
-		[]byte(config.App.AdminPassword), bcrypt.DefaultCost,
-	)
+	// Şifre verilmemişse veya bilinen varsayılan şifreyse rastgele bir şifre üret
+	password := config.App.AdminPassword
+	generated := false
+	if password == "" || password == config.DefaultAdminPassword {
+		password = randomPassword()
+		generated = true
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Fatalf("Failed to hash admin password: %v", err)
 	}
@@ -83,5 +91,17 @@ func seedAdmin() uint {
 	}
 
 	log.Printf("Admin user created: %s", config.App.AdminUsername)
+	if generated {
+		// Şifre yalnızca bu ilk oluşturmada bir kez gösterilir
+		log.Printf("🔑 Generated admin password (shown only once, change it after login): %s", password)
+	}
 	return admin.ID
+}
+
+func randomPassword() string {
+	buf := make([]byte, 12)
+	if _, err := rand.Read(buf); err != nil {
+		log.Fatalf("Failed to generate admin password: %v", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(buf)
 }

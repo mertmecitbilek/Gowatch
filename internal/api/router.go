@@ -1,14 +1,26 @@
 package api
 
 import (
+	"log"
+
 	"github.com/gin-gonic/gin"
 
 	"gowatch/internal/api/handlers"
 	"gowatch/internal/api/middleware"
+	"gowatch/internal/config"
 )
 
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
+
+	// X-Forwarded-For başlığına yalnızca tanımlı proxy'lerden güvenilir;
+	// aksi halde saldırgan sahte IP göndererek giriş denemesi sınırını aşabilirdi.
+	if err := r.SetTrustedProxies(config.App.TrustedProxies); err != nil {
+		log.Fatalf("Invalid TRUSTED_PROXIES: %v", err)
+	}
+
+	r.Use(middleware.SecurityHeaders())
+	r.Use(middleware.SameOrigin())
 
 	r.LoadHTMLGlob("web/templates/*")
 	r.Static("/static", "./web/static")

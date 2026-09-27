@@ -30,31 +30,33 @@ type User struct {
 	gorm.Model
 	Username string `json:"username" gorm:"uniqueIndex;not null"`
 	Password string `json:"-" gorm:"not null"` // bcrypt hash
+	// SessionVersion şifre değiştiğinde artırılır; eski oturum çerezleri geçersiz olur
+	SessionVersion int `json:"-" gorm:"not null;default:0"`
 }
 
 // Monitor izlenen servis
 type Monitor struct {
 	gorm.Model
-	UserID            uint          `json:"user_id" gorm:"index;not null;default:1"`
-	Name              string        `json:"name" gorm:"not null"`
-	Type              MonitorType   `json:"type" gorm:"not null"`
-	URL               string        `json:"url"`
-	Port              int           `json:"port"`
-	Interval          int           `json:"interval" gorm:"default:60"`
-	Timeout           int           `json:"timeout" gorm:"default:30"`
-	Retries           int           `json:"retries" gorm:"default:1"`
-	Active            bool          `json:"active" gorm:"default:true"`
-	Status            MonitorStatus `json:"status" gorm:"default:2"`
-	UptimePercent     float64       `json:"uptime_percent"`
-	AvgLatency        int64         `json:"avg_latency"`
-	LastCheckedAt     *time.Time    `json:"last_checked_at"`
-	NotificationIDs   string        `json:"notification_ids"`
-	MaxRedirects      int           `json:"max_redirects" gorm:"default:10"`
-	AcceptedCodes     string        `json:"accepted_codes" gorm:"default:\"200-299\""`
-	Description       string        `json:"description"`
-	DNSResolveType    string        `json:"dns_resolve_type"`
-	DNSResolveServer  string        `json:"dns_resolve_server"`
-	CronJobID         int           `json:"-" gorm:"-"`
+	UserID           uint          `json:"user_id" gorm:"index;not null;default:1"`
+	Name             string        `json:"name" gorm:"not null"`
+	Type             MonitorType   `json:"type" gorm:"not null"`
+	URL              string        `json:"url"`
+	Port             int           `json:"port"`
+	Interval         int           `json:"interval" gorm:"default:60"`
+	Timeout          int           `json:"timeout" gorm:"default:30"`
+	Retries          int           `json:"retries" gorm:"default:1"`
+	Active           bool          `json:"active" gorm:"default:true"`
+	Status           MonitorStatus `json:"status" gorm:"default:2"`
+	UptimePercent    float64       `json:"uptime_percent"`
+	AvgLatency       int64         `json:"avg_latency"`
+	LastCheckedAt    *time.Time    `json:"last_checked_at"`
+	NotificationIDs  string        `json:"notification_ids"`
+	MaxRedirects     int           `json:"max_redirects" gorm:"default:10"`
+	AcceptedCodes    string        `json:"accepted_codes" gorm:"default:\"200-299\""`
+	Description      string        `json:"description"`
+	DNSResolveType   string        `json:"dns_resolve_type"`
+	DNSResolveServer string        `json:"dns_resolve_server"`
+	CronJobID        int           `json:"-" gorm:"-"`
 }
 
 // Heartbeat tek bir kontrol sonucu

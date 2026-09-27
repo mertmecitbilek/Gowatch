@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"gowatch/internal/api/middleware"
 	"gowatch/internal/database"
@@ -10,12 +11,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+)
+
+// Kaba kuvvet (brute force) saldırılarına karşı IP başına deneme sınırları
+var (
+	loginLimiter    = middleware.NewRateLimiter(10, 15*time.Minute) // 15 dakikada 10 hatalı giriş
+	registerLimiter = middleware.NewRateLimiter(5, time.Hour)       // saatte 5 yeni hesap
 )
 
 // GetLoginPage login sayfasını göster
 func GetLoginPage(c *gin.Context) {
-	session, _ := middleware.Store.Get(c.Request, "gowatch-session")
-	if session.Values["user_id"] != nil {
+	if middleware.CurrentUser(c.Request) != nil {
 		c.Redirect(http.StatusFound, "/")
 		return
 	}
@@ -26,38 +33,44 @@ func GetLoginPage(c *gin.Context) {
 
 // PostLogin giriş işlemini gerçekleştir
 func PostLogin(c *gin.Context) {
+	renderError := func(status int, msg string) {
+		c.HTML(status, "login.html", gin.H{
+			"title": "Login — GoWatch",
+			"error": msg,
+		})
+	}
+
+	ip := c.ClientIP()
+	if loginLimiter.Blocked(ip) {
+		renderError(http.StatusTooManyRequests, "Too many failed attempts, please try again later")
+		return
+	}
+
 	username := c.PostForm("username")
 	password := c.PostForm("password")
 
 	var user models.User
 	if err := database.DB.Where("username = ?", username).First(&user).Error; err != nil {
-		c.HTML(http.StatusUnauthorized, "login.html", gin.H{
-			"title": "Login — GoWatch",
-			"error": "Invalid username or password",
-		})
+		loginLimiter.Hit(ip)
+		renderError(http.StatusUnauthorized, "Invalid username or password")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		c.HTML(http.StatusUnauthorized, "login.html", gin.H{
-			"title": "Login — GoWatch",
-			"error": "Invalid username or password",
-		})
+		loginLimiter.Hit(ip)
+		renderError(http.StatusUnauthorized, "Invalid username or password")
 		return
 	}
 
-	session, _ := middleware.Store.Get(c.Request, "gowatch-session")
-	session.Values["user_id"] = user.ID
-	session.Values["username"] = user.Username
-	session.Save(c.Request, c.Writer)
-
+	loginLimiter.Reset(ip)
+	middleware.SaveUserSession(c, &user)
 	c.Redirect(http.StatusFound, "/")
 }
 
 // PostLogout çıkış işlemi
 func PostLogout(c *gin.Context) {
-	session, _ := middleware.Store.Get(c.Request, "gowatch-session")
-	session.Values["user_id"] = nil
+	session, _ := middleware.Store.Get(c.Request, middleware.SessionName)
+	session.Values = map[interface{}]interface{}{}
 	session.Options.MaxAge = -1
 	session.Save(c.Request, c.Writer)
 	c.Redirect(http.StatusFound, "/login")
@@ -65,8 +78,7 @@ func PostLogout(c *gin.Context) {
 
 // GetRegisterPage kayıt sayfasını göster
 func GetRegisterPage(c *gin.Context) {
-	session, _ := middleware.Store.Get(c.Request, "gowatch-session")
-	if session.Values["user_id"] != nil {
+	if middleware.CurrentUser(c.Request) != nil {
 		c.Redirect(http.StatusFound, "/")
 		return
 	}
@@ -89,6 +101,15 @@ func PostRegister(c *gin.Context) {
 		})
 	}
 
+	ip := c.ClientIP()
+	if registerLimiter.Blocked(ip) {
+		c.HTML(http.StatusTooManyRequests, "register.html", gin.H{
+			"title": "Register — GoWatch",
+			"error": "Too many accounts created, please try again later",
+		})
+		return
+	}
+
 	// Validasyon
 	if len(username) < 3 {
 		renderError("Username must be at least 3 characters")
@@ -98,8 +119,13 @@ func PostRegister(c *gin.Context) {
 		renderError("Username must be at most 32 characters")
 		return
 	}
-	if len(password) < 6 {
-		renderError("Password must be at least 6 characters")
+	if len(password) < 8 {
+		renderError("Password must be at least 8 characters")
+		return
+	}
+	if len(password) > 72 {
+		// bcrypt 72 byte'tan sonrasını yok sayar
+		renderError("Password must be at most 72 characters")
 		return
 	}
 	if password != confirmPassword {
@@ -130,13 +156,10 @@ func PostRegister(c *gin.Context) {
 		renderError("Could not create account, please try again")
 		return
 	}
+	registerLimiter.Hit(ip)
 
 	// Otomatik giriş yap
-	session, _ := middleware.Store.Get(c.Request, "gowatch-session")
-	session.Values["user_id"] = newUser.ID
-	session.Values["username"] = newUser.Username
-	session.Save(c.Request, c.Writer)
-
+	middleware.SaveUserSession(c, &newUser)
 	c.Redirect(http.StatusFound, "/")
 }
 
@@ -170,11 +193,6 @@ func APIUpdateUsername(c *gin.Context) {
 		return
 	}
 
-	// Session güncelle
-	session, _ := middleware.Store.Get(c.Request, "gowatch-session")
-	session.Values["username"] = username
-	session.Save(c.Request, c.Writer)
-
 	c.JSON(http.StatusOK, gin.H{"message": "Username updated", "username": username})
 }
 
@@ -191,8 +209,8 @@ func APIUpdatePassword(c *gin.Context) {
 		return
 	}
 
-	if len(req.NewPassword) < 6 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "New password must be at least 6 characters"})
+	if len(req.NewPassword) < 8 || len(req.NewPassword) > 72 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "New password must be 8-72 characters"})
 		return
 	}
 
@@ -213,6 +231,18 @@ func APIUpdatePassword(c *gin.Context) {
 		return
 	}
 
-	database.DB.Model(&models.User{}).Where("id = ?", uid).Update("password", string(hashed))
+	// Oturum sürümünü artır: diğer cihazlardaki eski oturumlar geçersiz olur
+	if err := database.DB.Model(&user).Updates(map[string]interface{}{
+		"password":        string(hashed),
+		"session_version": gorm.Expr("session_version + 1"),
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
+		return
+	}
+
+	// Bu cihazdaki oturumu yeni sürümle yenile
+	database.DB.First(&user, uid)
+	middleware.SaveUserSession(c, &user)
+
 	c.JSON(http.StatusOK, gin.H{"message": "Password updated successfully"})
 }

@@ -16,9 +16,9 @@ import (
 
 // Manager tüm monitörlerin zamanlayıcısını yönetir
 type Manager struct {
-	cron    *cron.Cron
-	jobs    map[uint]cron.EntryID
-	mu      sync.Mutex
+	cron *cron.Cron
+	jobs map[uint]cron.EntryID
+	mu   sync.Mutex
 }
 
 var GlobalManager *Manager
@@ -34,6 +34,10 @@ func NewManager() *Manager {
 func (m *Manager) Start() {
 	m.cron.Start()
 	log.Println("Monitor scheduler started")
+
+	// Eski heartbeat kayıtlarını her gün temizle (veritabanı sınırsız büyümesin)
+	go cleanupHeartbeats()
+	m.cron.AddFunc("@every 24h", cleanupHeartbeats)
 
 	// Veritabanındaki aktif monitörleri yükle
 	var monitors []models.Monitor
@@ -103,7 +107,6 @@ func (m *Manager) runCheck(monitorID uint) {
 	}
 
 	var result CheckResult
-	var lastErr error
 
 	// Retry mekanizması
 	for i := 0; i <= mon.Retries; i++ {
@@ -123,13 +126,10 @@ func (m *Manager) runCheck(monitorID uint) {
 		if result.Status == models.StatusUp {
 			break
 		}
-		lastErr = fmt.Errorf("%s", result.Message)
-
 		if i < mon.Retries {
 			time.Sleep(3 * time.Second)
 		}
 	}
-	_ = lastErr
 
 	now := time.Now()
 
@@ -147,28 +147,26 @@ func (m *Manager) runCheck(monitorID uint) {
 	previousStatus := mon.Status
 	statusChanged := previousStatus != result.Status
 
-	// Monitor güncelle
-	database.DB.Model(&mon).Updates(map[string]interface{}{
-		"status":          result.Status,
-		"avg_latency":     calculateAvgLatency(mon.ID),
-		"uptime_percent":  calculateUptimePercent(mon.ID),
-		"last_checked_at": now,
-	})
-
-	// Uptime yüzdesini de al
+	// Monitor güncelle (istatistikler bir kez hesaplanır)
 	mon.Status = result.Status
 	mon.LastCheckedAt = &now
 	mon.AvgLatency = calculateAvgLatency(mon.ID)
 	mon.UptimePercent = calculateUptimePercent(mon.ID)
+	database.DB.Model(&mon).Updates(map[string]interface{}{
+		"status":          mon.Status,
+		"avg_latency":     mon.AvgLatency,
+		"uptime_percent":  mon.UptimePercent,
+		"last_checked_at": now,
+	})
 
 	// Durum değişikliğinde bildirim gönder
 	if statusChanged && previousStatus != models.StatusPending {
 		go notification.SendStatusChange(&mon, heartbeat, previousStatus)
 	}
 
-	// WebSocket ile tüm istemcilere bildir
+	// WebSocket ile yalnızca monitörün sahibine bildir
 	if ws.GlobalHub != nil {
-		ws.GlobalHub.Broadcast("heartbeat", map[string]interface{}{
+		ws.GlobalHub.SendToUser(mon.UserID, "heartbeat", map[string]interface{}{
 			"monitor_id":     mon.ID,
 			"monitor_name":   mon.Name,
 			"status":         result.Status,
@@ -211,4 +209,16 @@ func calculateUptimePercent(monitorID uint) float64 {
 		Count(&up)
 
 	return float64(up) / float64(total) * 100
+}
+
+// HeartbeatRetention bu süreden eski kontrol kayıtları silinir (uptime en fazla 30 gün üzerinden hesaplanır)
+const HeartbeatRetention = 31 * 24 * time.Hour
+
+func cleanupHeartbeats() {
+	res := database.DB.Where("time < ?", time.Now().Add(-HeartbeatRetention)).Delete(&models.Heartbeat{})
+	if res.Error != nil {
+		log.Printf("Heartbeat cleanup failed: %v", res.Error)
+	} else if res.RowsAffected > 0 {
+		log.Printf("Heartbeat cleanup: %d old records deleted", res.RowsAffected)
+	}
 }

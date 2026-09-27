@@ -29,14 +29,12 @@ func SendStatusChange(mon *models.Monitor, hb models.Heartbeat, previousStatus m
 	body := fmt.Sprintf("Monitor: %s\nStatus: %s\nMessage: %s\nLatency: %dms",
 		mon.Name, statusText, hb.Msg, hb.Latency)
 
-	for _, id := range notifIDs {
-		var notif models.Notification
-		if err := database.DB.First(&notif, id).Error; err != nil {
-			continue
-		}
-		if !notif.Active {
-			continue
-		}
+	// Yalnızca monitör sahibinin aktif kanalları kullanılır
+	var notifs []models.Notification
+	database.DB.Where("id IN ? AND user_id = ? AND active = ?", notifIDs, mon.UserID, true).Find(&notifs)
+
+	for i := range notifs {
+		notif := notifs[i]
 
 		var err error
 		switch notif.Type {

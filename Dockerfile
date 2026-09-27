@@ -24,7 +24,7 @@ RUN GOTOOLCHAIN=auto CGO_ENABLED=1 GOOS=linux go build -a -ldflags '-linkmode ex
 FROM alpine:3.19
 
 # Timezone ve CA sertifikalar
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata su-exec
 
 WORKDIR /app
 
@@ -46,7 +46,11 @@ ENV DATABASE_PATH=/app/data/gowatch.db
 # Non-root user (güvenlik)
 RUN addgroup -S gowatch && adduser -S gowatch -G gowatch
 RUN chown -R gowatch:gowatch /app
-USER gowatch
+
+# Başlangıç scripti veri dizininin izinlerini düzeltir ve uygulamayı gowatch kullanıcısıyla başlatır
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Uygulama çalıştır
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["./gowatch"]

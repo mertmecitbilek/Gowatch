@@ -1,0 +1,2 @@
+# Shell scriptleri Windows'ta klonlansa bile LF satır sonuyla kalmalı (aksi halde container açılmaz)
+*.sh text eol=lf

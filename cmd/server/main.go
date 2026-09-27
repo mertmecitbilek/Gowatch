@@ -27,7 +27,7 @@ func main() {
 	database.Connect()
 
 	// Session store başlat
-	middleware.InitSession(config.App.SessionSecret)
+	middleware.InitSession(config.App.SessionSecret, config.App.CookieSecure)
 
 	// WebSocket hub başlat
 	ws.GlobalHub = ws.NewHub()
@@ -48,7 +48,6 @@ func main() {
 		addr := ":" + config.App.Port
 		log.Printf("🚀 GoWatch started on http://localhost%s", addr)
 		log.Printf("📊 Dashboard: http://localhost%s", addr)
-		log.Printf("📡 Status Page: http://localhost%s/status", addr)
 		if err := r.Run(addr); err != nil {
 			log.Fatalf("Server failed: %v", err)
 		}

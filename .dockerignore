@@ -7,6 +7,8 @@ bin/
 # Veritabanı (data/ klasörü Docker volume'dan gelecek)
 *.db
 data/
+session.key
+tmp/
 
 # Ortam değişkenleri (hassas bilgiler)
 .env

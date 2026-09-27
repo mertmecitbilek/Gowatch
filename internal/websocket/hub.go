@@ -17,18 +17,25 @@ type Message struct {
 
 // Client tek bir WebSocket bağlantısı
 type Client struct {
-	hub  *Hub
-	conn *websocket.Conn
-	send chan []byte
+	hub    *Hub
+	conn   *websocket.Conn
+	send   chan []byte
+	userID uint
+}
+
+// outgoing belirli bir kullanıcıya gidecek mesaj
+type outgoing struct {
+	userID uint
+	data   []byte
 }
 
 // Hub tüm WebSocket istemcilerini yönetir
 type Hub struct {
 	clients    map[*Client]bool
-	broadcast  chan []byte
+	broadcast  chan outgoing
 	register   chan *Client
 	unregister chan *Client
-	mu         sync.RWMutex
+	mu         sync.Mutex
 }
 
 var GlobalHub *Hub
@@ -36,7 +43,7 @@ var GlobalHub *Hub
 func NewHub() *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
-		broadcast:  make(chan []byte, 256),
+		broadcast:  make(chan outgoing, 256),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 	}
@@ -48,8 +55,9 @@ func (h *Hub) Run() {
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client] = true
+			total := len(h.clients)
 			h.mu.Unlock()
-			log.Printf("WebSocket client connected. Total: %d", len(h.clients))
+			log.Printf("WebSocket client connected. Total: %d", total)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -57,45 +65,50 @@ func (h *Hub) Run() {
 				delete(h.clients, client)
 				close(client.send)
 			}
+			total := len(h.clients)
 			h.mu.Unlock()
-			log.Printf("WebSocket client disconnected. Total: %d", len(h.clients))
+			log.Printf("WebSocket client disconnected. Total: %d", total)
 
-		case message := <-h.broadcast:
-			h.mu.RLock()
+		case msg := <-h.broadcast:
+			h.mu.Lock()
 			for client := range h.clients {
+				// Kullanıcılar yalnızca kendi monitörlerinin mesajlarını alır
+				if client.userID != msg.userID {
+					continue
+				}
 				select {
-				case client.send <- message:
+				case client.send <- msg.data:
 				default:
 					close(client.send)
 					delete(h.clients, client)
 				}
 			}
-			h.mu.RUnlock()
+			h.mu.Unlock()
 		}
 	}
 }
 
-// Broadcast tüm istemcilere mesaj gönder
-func (h *Hub) Broadcast(msgType string, payload interface{}) {
-	msg := Message{Type: msgType, Payload: payload}
-	data, err := json.Marshal(msg)
+// SendToUser yalnızca verilen kullanıcının bağlı istemcilerine mesaj gönderir
+func (h *Hub) SendToUser(userID uint, msgType string, payload interface{}) {
+	data, err := json.Marshal(Message{Type: msgType, Payload: payload})
 	if err != nil {
 		log.Printf("Failed to marshal WebSocket message: %v", err)
 		return
 	}
 	select {
-	case h.broadcast <- data:
+	case h.broadcast <- outgoing{userID: userID, data: data}:
 	default:
 		log.Println("WebSocket broadcast channel full, dropping message")
 	}
 }
 
-// ServeWs WebSocket bağlantısını upgrade eder
-func (h *Hub) ServeWs(conn *websocket.Conn) {
+// ServeWs WebSocket bağlantısını kullanıcıya bağlayarak başlatır
+func (h *Hub) ServeWs(conn *websocket.Conn, userID uint) {
 	client := &Client{
-		hub:  h,
-		conn: conn,
-		send: make(chan []byte, 256),
+		hub:    h,
+		conn:   conn,
+		send:   make(chan []byte, 256),
+		userID: userID,
 	}
 	h.register <- client
 

@@ -39,6 +39,21 @@ Giriş sayfasındaki **"Create Account"** butonuna tıklayarak ilk kullanıcın�
 
 ---
 
+## 🔒 Güvenlik ve Yapılandırma
+
+- **Oturum anahtarı:** `SESSION_SECRET` verilmezse ilk açılışta rastgele üretilir ve `./data/session.key` dosyasına kaydedilir. Bilinen örnek değerler kabul edilmez.
+- **Admin hesabı:** `ADMIN_PASSWORD` verilmezse ilk açılışta rastgele bir şifre üretilir ve loglarda **bir kez** gösterilir:
+  ```bash
+  docker compose logs gowatch | grep "admin password"
+  ```
+  Giriş yaptıktan sonra şifreyi **Settings** sayfasından değiştirin.
+- **Yerel ağ servisleri:** Güvenlik nedeniyle (SSRF) `localhost`, `10.x`, `192.168.x` gibi iç adreslerin izlenmesi varsayılan olarak kapalıdır. Kendi ağınızdaki servisleri izlemek için `ALLOW_PRIVATE_TARGETS=true` ayarlayın.
+- **HTTPS / Reverse proxy:** HTTPS arkasında `COOKIE_SECURE=true`, nginx/traefik gibi bir proxy arkasında `TRUSTED_PROXIES=<proxy ip>` ayarlayın.
+
+Tüm ayarlar için [`.env.example`](.env.example) dosyasına bakabilirsiniz.
+
+---
+
 ## 📁 Veri Kalıcılığı (Data Persistence)
 
 Kullanıcı hesaplarınız, eklediğiniz monitörler ve geçmiş ping verileri güvenle saklanır. Bunun için yerel bir SQLite veritabanı kullanıyoruz.

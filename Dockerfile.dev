@@ -1,7 +1,8 @@
 FROM golang:1.25-alpine
 
 RUN apk add --no-cache gcc musl-dev
-RUN go install github.com/air-verse/air@latest
+# air sürümü sabit: @latest yeni Go sürümü isteyip derlemeyi bozabiliyor (v1.67.2+ Go 1.26 gerektirir)
+RUN go install github.com/air-verse/air@v1.67.1
 
 WORKDIR /app
 COPY go.mod go.sum ./

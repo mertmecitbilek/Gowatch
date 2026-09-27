@@ -1,13 +1,32 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
+	"strings"
+	"unicode/utf8"
 
 	"gowatch/internal/database"
 	"gowatch/internal/database/models"
+	"gowatch/internal/notification"
 
 	"github.com/gin-gonic/gin"
 )
+
+// notificationRequest oluşturma/güncelleme isteğinde kabul edilen alanlar
+type notificationRequest struct {
+	Name   *string `json:"name"`
+	Type   *string `json:"type"`
+	Config *string `json:"config"`
+	Active *bool   `json:"active"`
+}
+
+func validateNotification(n *models.Notification) error {
+	if n.Name == "" || utf8.RuneCountInString(n.Name) > 100 {
+		return errors.New("name must be 1-100 characters")
+	}
+	return notification.ValidateConfig(n.Type, n.Config)
+}
 
 // APIGetNotifications kullanıcının bildirim kanallarını listele
 func APIGetNotifications(c *gin.Context) {
@@ -21,28 +40,30 @@ func APIGetNotifications(c *gin.Context) {
 func APICreateNotification(c *gin.Context) {
 	uid := currentUserID(c)
 
-	var req struct {
-		Name   string `json:"name" binding:"required"`
-		Type   string `json:"type" binding:"required"`
-		Config string `json:"config" binding:"required"`
-		Active bool   `json:"active"`
-	}
-
+	var req notificationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Name == nil || req.Type == nil || req.Config == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name, type and config are required"})
 		return
 	}
 
 	notif := models.Notification{
 		UserID: uid,
-		Name:   req.Name,
-		Type:   req.Type,
-		Config: req.Config,
+		Name:   strings.TrimSpace(*req.Name),
+		Type:   strings.TrimSpace(*req.Type),
+		Config: *req.Config,
 		Active: true,
+	}
+	if err := validateNotification(&notif); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	if err := database.DB.Create(&notif).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create notification channel"})
 		return
 	}
 
@@ -60,14 +81,32 @@ func APIUpdateNotification(c *gin.Context) {
 		return
 	}
 
-	var req map[string]interface{}
+	var req notificationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	delete(req, "user_id")
+	if req.Name != nil {
+		notif.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.Type != nil {
+		notif.Type = strings.TrimSpace(*req.Type)
+	}
+	if req.Config != nil {
+		notif.Config = *req.Config
+	}
+	if req.Active != nil {
+		notif.Active = *req.Active
+	}
+	if err := validateNotification(&notif); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	database.DB.Model(&notif).Updates(req)
+	if err := database.DB.Model(&notif).Select("name", "type", "config", "active").Updates(&notif).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update notification channel"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"data": notif})
 }
 
@@ -95,7 +134,7 @@ func GetSettingsPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "settings.html", gin.H{
 		"title":         "Settings — GoWatch",
 		"notifications": notifs,
-		"username":       c.GetString("username"),
-		"userInitial":    userInitial(c),
+		"username":      c.GetString("username"),
+		"userInitial":   userInitial(c),
 	})
 }

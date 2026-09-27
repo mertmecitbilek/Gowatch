@@ -153,7 +153,12 @@ function showToast(message, type = 'info') {
 
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<span>${icons[type] || ''}</span><span>${message}</span>`;
+    // Mesaj kullanıcı girdisi (monitör adı) içerebilir; HTML olarak değil metin olarak eklenir
+    const icon = document.createElement('span');
+    icon.textContent = icons[type] || '';
+    const text = document.createElement('span');
+    text.textContent = message;
+    toast.append(icon, text);
     container.appendChild(toast);
 
     setTimeout(() => {

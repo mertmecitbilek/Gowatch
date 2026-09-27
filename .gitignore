@@ -23,6 +23,7 @@ go.work.sum
 
 # Database and data folders
 data/
+session.key
 *.db
 *.sqlite
 *.sqlite3

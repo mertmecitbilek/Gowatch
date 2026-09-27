@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -98,7 +98,7 @@
                     </div>
                     <div class="form-group">
                         <label for="new-password">New Password</label>
-                        <input type="password" id="new-password" placeholder="••••••••" minlength="6">
+                        <input type="password" id="new-password" placeholder="••••••••" minlength="8" maxlength="72">
                     </div>
                     <button class="btn btn-primary" id="save-password-btn" onclick="savePassword()">
                         Save Password
@@ -227,7 +227,7 @@
         const cur = document.getElementById('current-password').value;
         const nw = document.getElementById('new-password').value;
         if (!cur || !nw) { showToast('Fill in both fields', 'error'); return; }
-        if (nw.length < 6) { showToast('New password must be at least 6 characters', 'error'); return; }
+        if (nw.length < 8 || nw.length > 72) { showToast('New password must be 8-72 characters', 'error'); return; }
         const btn = document.getElementById('save-password-btn');
         btn.disabled = true;
         const r = await fetch('/api/profile/password', {

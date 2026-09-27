@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -111,7 +111,7 @@
                 <span class="section-hint">Hover for details</span>
             </div>
             <div class="heartbeat-bar" id="heartbeat-bar">
-                {{range .heartbeats}}
+                {{range .recent}}
                 <div class="hb-block {{if eq .Status 1}}hb-up{{else}}hb-down{{end}}"
                      title="{{.Time.Format "2006-01-02 15:04:05"}} — {{.Msg}} ({{.Latency}}ms)">
                 </div>
